@@ -12,6 +12,7 @@ import (
 	"auction/internal/handler"
 
 	"github.com/joho/godotenv"
+	"github.com/gorilla/websocket"
 )
 
 func main() {
@@ -27,16 +28,20 @@ func main() {
 	}
 	cancel := make(map[string]context.CancelFunc)
 	m := make(map[string]*sync.Mutex)
+	connectionmap := make(map[string][]*websocket.Conn)
+	realtimemutex := make(map[string]*sync.Mutex)
 	app := &handler.App{
 		Redisconn: redisconn,
 		Pgconn:pgconn,
 		M:m,
 		Cancel:cancel,
+		Connectionmap: connectionmap,
+		Realtimemutex: realtimemutex,
 	}
 	mux := http.NewServeMux()	
 	mux.HandleFunc("/setbid", app.Setbid)
 	mux.HandleFunc("/bid", app.Bid)
 	mux.HandleFunc("/getbid", app.Getbid)
-
+	mux.HandleFunc("/ws", app.Ws)
 	log.Fatal(http.ListenAndServe(":8080", mux))
 }

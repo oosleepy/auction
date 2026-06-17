@@ -26,3 +26,5 @@ type UserBidRequest struct{
 	Bid string `json:"bid"`
 	Name string `json:"name"`
 }
+
+

@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
+	"github.com/gorilla/websocket"
 )
 
 type App struct {
@@ -22,6 +23,9 @@ type App struct {
 	Cancel    map[string]context.CancelFunc
 	Pgconn    *pgx.Conn
 	Metamutex sync.Mutex
+	Connectionmap map[string][]*websocket.Conn
+	Realtimemutex map[string] *sync.Mutex
+	MetaRealmutex sync.Mutex
 }
 
 func (a *App) exitwriteroutine(ctx context.Context, expiry int, namespace string) {
@@ -40,6 +44,31 @@ func (a *App) exitwriteroutine(ctx context.Context, expiry int, namespace string
 		return
 	}
 }
+
+
+var upgrader = websocket.Upgrader{}
+func (a *App) Ws(w http.ResponseWriter, r *http.Request){
+	
+	query := r.URL.Query().Get("name")
+	 
+	conn,err := upgrader.Upgrade(w, r, nil)
+	if err != nil{
+		http.Error(w,"failed to create conneciton",http.StatusBadGateway)
+		return
+	}
+	a.MetaRealmutex.Lock()
+	if a.Realtimemutex[query] == nil{
+		a.Realtimemutex[query] = &sync.Mutex{}
+	}
+	a.MetaRealmutex.Unlock()
+
+	a.Realtimemutex[query].Lock()
+	defer a.Realtimemutex[query].Unlock()
+	a.Connectionmap[query] = append(a.Connectionmap[query], conn)
+
+}
+
+
 
 func (a *App) Getbid(w http.ResponseWriter, r *http.Request) {
 	var Response models.GetBidResponse
@@ -95,6 +124,21 @@ func (a *App) Bid(w http.ResponseWriter, r *http.Request) {
 	if userbid > highestbid {
 		a.Redisconn.Set(context.Background(), namespace+"bid", UserBody.Bid, time.Duration(0))
 		a.Redisconn.Set(context.Background(), namespace+"ip", r.RemoteAddr, time.Duration(0))
+
+		wsReponse := models.GetBidResponse{
+			Name: UserBody.Name,
+			Bid: UserBody.Bid,
+		}
+		a.MetaRealmutex.Lock()
+		if a.Realtimemutex[UserBody.Name] == nil {
+			a.Realtimemutex[UserBody.Name] = &sync.Mutex{}
+		}
+		a.MetaRealmutex.Unlock()
+		a.Realtimemutex[UserBody.Name].Lock()
+		defer a.Realtimemutex[UserBody.Name].Unlock()
+		for _,conn := range(a.Connectionmap[UserBody.Name]){
+			conn.WriteJSON(wsReponse)
+		}
 		w.WriteHeader(http.StatusAccepted)
 	} else {
 		w.WriteHeader(http.StatusConflict)
