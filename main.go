@@ -1,13 +1,15 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"sync"
 
 	"auction/config"
 	redis "auction/internal/cache"
-	"auction/internal/handler"
 	"auction/internal/db"
+	"auction/internal/handler"
 
 	"github.com/joho/godotenv"
 )
@@ -22,10 +24,14 @@ func main() {
 	pgconn,err := db.Pgconn(cfg.PostgresURL)
 	if err != nil{
 		log.Fatal("postgres connection error")
-	}	
+	}
+	cancel := make(map[string]context.CancelFunc)
+	m := make(map[string]*sync.Mutex)
 	app := &handler.App{
 		Redisconn: redisconn,
-		Pgconn:pgconn,	
+		Pgconn:pgconn,
+		M:m,
+		Cancel:cancel,
 	}
 	mux := http.NewServeMux()	
 	mux.HandleFunc("/setbid", app.Setbid)

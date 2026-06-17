@@ -12,12 +12,17 @@ type Setredis struct{
 	Expiry int `json:"time"`
 }
 
-type GetBid struct {
+type GetBidResponse struct {
 	Name string `json:"name"`
 	Bid string `json:"bid"`
 
 }
 
-type UserBid struct{
-	UserBid string `json:"userbid"`
+type GetBidRequest struct {
+	Name string `json:"name"`
+}
+
+type UserBidRequest struct{
+	Bid string `json:"bid"`
+	Name string `json:"name"`
 }

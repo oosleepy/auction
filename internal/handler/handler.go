@@ -18,32 +18,36 @@ import (
 
 type App struct {
 	Redisconn *redis.Client
-	M         sync.Mutex
-	Cancel    context.CancelFunc
+	M         map[string]*sync.Mutex
+	Cancel    map[string]context.CancelFunc
 	Pgconn    *pgx.Conn
+	Metamutex sync.Mutex
 }
 
-func (a *App) exitwriteroutine(ctx context.Context, expiry int) {
+func (a *App) exitwriteroutine(ctx context.Context, expiry int,namespace string) {
 	select {
 	case <-time.After(time.Duration(expiry)):
-		bidAmt := a.Redisconn.Get(context.Background(), "Bid").Val()
-		bidName := a.Redisconn.Get(context.Background(), "Name").Val()
-		ip := a.Redisconn.Get(context.Background(), "IP").Val()
+		bidAmt := a.Redisconn.Get(context.Background(), namespace+"bid").Val()
+		bidName := a.Redisconn.Get(context.Background(), namespace+"name").Val()
+		ip := a.Redisconn.Get(context.Background(), namespace+"ip").Val()
 		_, err := a.Pgconn.Exec(context.Background(), "INSERT INTO bid_history (bid_name,bid_amt,ip) VALUES ($1,$2,$3) ", bidName, bidAmt, ip)
 		if err != nil {
 			log.Fatal(err)
 		}
-		a.Redisconn.Del(context.Background(), "Bid", "Name", "IP")
-		a.Redisconn.Set(context.Background(), "Start", "ended", time.Duration(0))
+		a.Redisconn.Del(context.Background(), namespace+"bid", namespace+"name", namespace+"ip")
+		a.Redisconn.Set(context.Background(), namespace+"start", "ended", time.Duration(0))
 	case <-ctx.Done():
 		return
 	}
 }
 
 func (a *App) Getbid(w http.ResponseWriter, r *http.Request) {
-	var ResponseBid models.GetBid
-	exist := a.Redisconn.Exists(context.Background(), "Bid").Val()
-	endcheck := a.Redisconn.Get(context.Background(), "Start").Val()
+	var Response models.GetBidResponse
+	var Request models.GetBidRequest
+	json.NewDecoder(r.Body).Decode(&Request)
+	namespace := "auction:"+Request.Name+":"
+	exist := a.Redisconn.Exists(context.Background(), namespace+"bid").Val()
+	endcheck := a.Redisconn.Get(context.Background(), namespace+"start").Val()
 	if endcheck == "ended" {
 		http.Error(w, "Auction ended",http.StatusNotFound)
 		return
@@ -51,29 +55,36 @@ func (a *App) Getbid(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Auction not started", http.StatusServiceUnavailable)
 		return
 	}else{
-	bid := a.Redisconn.Get(context.Background(), "Bid").Val()
-	name := a.Redisconn.Get(context.Background(), "Name").Val()
-	ResponseBid.Bid = bid
-	ResponseBid.Name = name
+	bid := a.Redisconn.Get(context.Background(), namespace+"bid").Val()
+	name := a.Redisconn.Get(context.Background(), namespace+"name").Val()
+	Response.Bid = bid
+	Response.Name = name
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(&ResponseBid)
+	json.NewEncoder(w).Encode(&Response)
 	}
 }
 
 func (a *App) Bid(w http.ResponseWriter, r *http.Request) {
-	var UserBody models.UserBid
+	var UserBody models.UserBidRequest
 	json.NewDecoder(r.Body).Decode(&UserBody)
-	userbid, err := strconv.Atoi(UserBody.UserBid)
+	userbid, err := strconv.Atoi(UserBody.Bid)
 	if err != nil {
 		http.Error(w, "error conversion", http.StatusBadRequest)
 		return
 	}
-	// mutexes locks this part for protecting race condition
-	a.M.Lock()         // this is mutex format lock then defer then the code(critical section) to protect
-	defer a.M.Unlock() // this solves teh issue of the 2 comments below written as thsi runs as soon as below retuns
-	highestbid, err := strconv.Atoi(a.Redisconn.Get(context.Background(), "Bid").Val())
+	namespace := "auction:"+UserBody.Name+":"
+
+	a.Metamutex.Lock()
+	if a.M[UserBody.Name] == nil{
+		a.M[UserBody.Name] = &sync.Mutex{}
+	}
+	a.Metamutex.Unlock()
+	// mutexes locks this part for protecting race condition         // this is mutex format lock then defer then the code(critical section) to protect
+	a.M[UserBody.Name].Lock()
+	defer a.M[UserBody.Name].Unlock() // this solves teh issue of the 2 comments below written as thsi runs as soon as below retuns
+	highestbid, err := strconv.Atoi(a.Redisconn.Get(context.Background(),namespace+"bid").Val())
 	if err != nil { // if its not nil -> no value really -> that happens when bid doesnt exist -> start/end
-		endcheck := a.Redisconn.Get(context.Background(), "Start").Val()
+		endcheck := a.Redisconn.Get(context.Background(),namespace+"start").Val()
 		if endcheck == "ended" {
 			http.Error(w, "Auction ended ", http.StatusNotFound)
 			return // here i need ot set a m.Unlock to unlock this part if bid is not set
@@ -83,8 +94,8 @@ func (a *App) Bid(w http.ResponseWriter, r *http.Request) {
 
 	}
 	if userbid > highestbid {
-		a.Redisconn.Set(context.Background(), "Bid", UserBody.UserBid, time.Duration(0))
-		a.Redisconn.Set(context.Background(), "IP", r.RemoteAddr, time.Duration(0))
+		a.Redisconn.Set(context.Background(), namespace+"bid", UserBody.Bid, time.Duration(0))
+		a.Redisconn.Set(context.Background(), namespace+"ip", r.RemoteAddr, time.Duration(0))
 		w.WriteHeader(http.StatusAccepted)
 	} else {
 		w.WriteHeader(http.StatusConflict)
@@ -95,20 +106,27 @@ func (a *App) Bid(w http.ResponseWriter, r *http.Request) {
 func (a *App) Setbid(w http.ResponseWriter, r *http.Request) {
 	var setredis models.Setredis
 	json.NewDecoder(r.Body).Decode(&setredis)	
+	
+	a.Metamutex.Lock()
+	if a.M[setredis.Name] == nil{
+		a.M[setredis.Name] = &sync.Mutex{}
+	}
+	a.Metamutex.Unlock()
 
-	a.M.Lock()
-	defer a.M.Unlock()
-	if a.Cancel != nil{
-		a.Cancel()
+	a.M[setredis.Name].Lock()
+	defer a.M[setredis.Name].Unlock()
+	if a.Cancel[setredis.Name] != nil{
+		a.Cancel[setredis.Name]()
 	}
 	ctx,cancel := context.WithCancel(context.Background())
-	a.Cancel = cancel
+	a.Cancel[setredis.Name] = cancel
 
 	expiry := setredis.Expiry * int(time.Second)
-	a.Redisconn.Set(context.Background(), "Name", setredis.Name, time.Duration(0))
-	a.Redisconn.Set(context.Background(), "Bid", setredis.Bid, time.Duration(0))
-	a.Redisconn.Set(context.Background(), "IP", setredis.IP, time.Duration(0))
-	a.Redisconn.Set(context.Background(), "Start", "active", time.Duration(0))
+	namespace := "auction:"+setredis.Name+":"
+	a.Redisconn.Set(context.Background(), namespace+"name", setredis.Name, time.Duration(0))
+	a.Redisconn.Set(context.Background(), namespace+"bid", setredis.Bid, time.Duration(0))
+	a.Redisconn.Set(context.Background(), namespace+"ip", setredis.IP, time.Duration(0))
+	a.Redisconn.Set(context.Background(), namespace+"start", "active", time.Duration(0))
 
-	go a.exitwriteroutine(ctx, expiry)
+	go a.exitwriteroutine(ctx, expiry,namespace)
 }
