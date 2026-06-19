@@ -43,5 +43,7 @@ func main() {
 	mux.HandleFunc("/bid", app.Bid)
 	mux.HandleFunc("/getbid", app.Getbid)
 	mux.HandleFunc("/ws", app.Ws)
+	mux.HandleFunc("/listactive", app.Listactive)
+	mux.HandleFunc("/listhistory", app.Listhistory)
 	log.Fatal(http.ListenAndServe(":8080", mux))
 }

@@ -1,7 +1,7 @@
-//Package models deals with models
+// Package models deals with models
 package models
 
-
+import "time"
 
 //go exports in capital but json serializes it so thats why the `json:"bid"`
 
@@ -27,4 +27,15 @@ type UserBidRequest struct{
 	Name string `json:"name"`
 }
 
+type ActiveListResponse struct{
+	ActiveList []string `json:"active_auciton"`
+}
 
+type ListHistoryPerRow struct{
+	Bidname string `json:"bid_name"`
+	Bidamt string `json:"bid_amt"`
+	IP string `json:"ip"`
+	Createdat time.Time `json:"created_at"`
+}
+
+type ListHistoryResponse []ListHistoryPerRow
