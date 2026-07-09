@@ -39,3 +39,8 @@ type ListHistoryPerRow struct{
 }
 
 type ListHistoryResponse []ListHistoryPerRow
+
+type UserRequest struct{
+	Username string `json:"username"`
+	Password string `json:"password"`
+}

@@ -56,6 +56,7 @@ func main() {
 	mux.HandleFunc("/ws", app.Ws)
 	mux.HandleFunc("/listactive", app.Listactive)
 	mux.HandleFunc("/listhistory", app.Listhistory)
+	mux.HandleFunc("/register", app.Register)
 	log.Println("Server started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
 }

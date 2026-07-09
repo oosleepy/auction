@@ -12,11 +12,13 @@ import (
 	"sync"
 	"time"
 
+	auth "auction/internal/auth"
 	"auction/internal/models"
 
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type App struct {
@@ -242,3 +244,69 @@ func (a *App) Listhistory(w http.ResponseWriter, r *http.Request){
 
 	json.NewEncoder(w).Encode(history)
 }
+
+
+func (a *App) Register(w http.ResponseWriter, r *http.Request){
+	var Request models.UserRequest
+	json.NewDecoder(r.Body).Decode(&Request)
+	hashpassword ,err := bcrypt.GenerateFromPassword([]byte(Request.Password), bcrypt.DefaultCost)
+	if err != nil{
+		http.Error(w,"Bad Request",http.StatusBadRequest)
+		return
+	}	
+	var check string 
+
+	exist := a.Pgconn.QueryRow(context.Background(), "SELECT username FROM users WHERE username = $1", Request.Username).Scan(&check)
+	if exist == nil{
+		http.Error(w, "Username already exists", http.StatusConflict)
+		return
+	}
+		_,err =a.Pgconn.Exec(context.Background(), "INSERT INTO users (username,password_hash) VALUES ($1,$2)", Request.Username,hashpassword)
+	 if err!=nil{
+		http.Error(w, "Database Error", http.StatusExpectationFailed)
+		return
+	}
+}
+
+func (a *App) Login(w http.ResponseWriter, r *http.Request){
+	var Request models.UserRequest
+	json.NewDecoder(r.Body).Decode(&Request)
+	var userid int	
+	var hashpass string
+	err :=  a.Pgconn.QueryRow(context.Background(), "SELECT password_hash,id FROM users WHERE username = $1",Request.Username).Scan(&hashpass,&userid)
+	if err != nil{
+		http.Error(w,"User Not Found",http.StatusNotFound)
+		return
+	}
+	err = bcrypt.CompareHashAndPassword([]byte(hashpass),[]byte(Request.Password))
+	if err != nil{
+		http.Error(w,"Incorrect Password",http.StatusConflict)
+		return
+	}
+	
+	tokenstring,err := auth.CreateAcessToken(userid)
+	if err !=nil{
+		http.Error(w,"jwt error",http.StatusServiceUnavailable)
+		return
+	}
+	
+	tokenheader := auth.Tokenheader{
+		Token:tokenstring,
+	}
+
+	json.NewEncoder(w).Encode(tokenheader)
+}
+
+func (a *App) GetTotalbid(w http.ResponseWriter, r *http.Request){
+	userid := r.Context().Value("userid").(int)
+
+	var totalbid int 
+
+	err := a.Pgconn.QueryRow(context.Background(), "SELECT totalbid FROM users WHERE id = $1", userid).Scan(&totalbid)
+	if err!= nil{
+		http.Error(w,"Database error",http.StatusNotFound)
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]int{"totalbid": totalbid})
+}
+
