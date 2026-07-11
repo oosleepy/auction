@@ -39,12 +39,12 @@ func (a *App) exitwriteroutine(ctx context.Context, expiry int, namespace string
 	case <-time.After(time.Duration(expiry)):
 		bidAmt := a.Redisconn.Get(context.Background(), namespace+"bid").Val()
 		bidName := a.Redisconn.Get(context.Background(), namespace+"name").Val()
-		ip := a.Redisconn.Get(context.Background(), namespace+"ip").Val()
-		_, err := a.Pgconn.Exec(context.Background(), "INSERT INTO bid_history (bid_name,bidamt,ip) VALUES ($1,$2,$3) ", bidName, bidAmt, ip)
+		ip := a.Redisconn.Get(context.Background(), namespace+"winner").Val()
+		_, err := a.Pgconn.Exec(context.Background(), "INSERT INTO bid_history (bid_name,bidamt,winner) VALUES ($1,$2,$3) ", bidName, bidAmt, ip)
 		if err != nil {
 			log.Fatal(err)
 		}
-		a.Redisconn.Del(context.Background(), namespace+"bid", namespace+"name", namespace+"ip", namespace+"start")
+		a.Redisconn.Del(context.Background(), namespace+"bid", namespace+"name", namespace+"winner", namespace+"start")
 
 	//Case 2 -> If cancel function is called ie the already running so overwrite case then this happens
 	case <-ctx.Done():
@@ -135,7 +135,8 @@ func (a *App) Bid(w http.ResponseWriter, r *http.Request) {
 	}
 	if userbid > highestbid {
 		a.Redisconn.Set(context.Background(), namespace+"bid", UserBody.Bid, time.Duration(0))
-		a.Redisconn.Set(context.Background(), namespace+"ip", r.RemoteAddr, time.Duration(0))
+		id := r.Context().Value("userid").(int)
+		a.Redisconn.Set(context.Background(), namespace+"winner",id, time.Duration(0))
 		
 
 		//make changes to the websocker connection of this auction
@@ -197,7 +198,7 @@ func (a *App) Setbid(w http.ResponseWriter, r *http.Request) {
 	namespace := "auction:" + setredis.Name + ":"
 	a.Redisconn.Set(context.Background(), namespace+"name", setredis.Name, time.Duration(0))
 	a.Redisconn.Set(context.Background(), namespace+"bid", setredis.Bid, time.Duration(0))
-	a.Redisconn.Set(context.Background(), namespace+"ip", setredis.IP, time.Duration(0))
+	a.Redisconn.Set(context.Background(), namespace+"winner", r.Context().Value("userid"), time.Duration(0))
 	a.Redisconn.Set(context.Background(), namespace+"start", "active", time.Duration(0))
 	
 	//Routine to end the auction after expirty -> by using ctx's cancel 
@@ -226,7 +227,7 @@ func (a *App) Listactive(w http.ResponseWriter, r  *http.Request){
 }
 
 func (a *App) Listhistory(w http.ResponseWriter, r *http.Request){
-	auctionlist,err := a.Pgconn.Query(context.Background(), "SELECT bid_name,bidamt,ip,created_at FROM bid_history")
+	auctionlist,err := a.Pgconn.Query(context.Background(), "SELECT bid_name,bidamt,winner,created_at FROM bid_history")
 	if err!= nil{
 		http.Error(w, "No history", http.StatusNotFound)
 		return
@@ -235,7 +236,7 @@ func (a *App) Listhistory(w http.ResponseWriter, r *http.Request){
 	var perrowstruct models.ListHistoryPerRow	
 	var history models.ListHistoryResponse
 	for auctionlist.Next(){
-		err := auctionlist.Scan(&perrowstruct.Bidname, &perrowstruct.Bidamt, &perrowstruct.IP, &perrowstruct.Createdat)
+		err := auctionlist.Scan(&perrowstruct.Bidname, &perrowstruct.Bidamt, &perrowstruct.UserID, &perrowstruct.Createdat)
 		if err!=nil{
 			fmt.Println(err)
 		}
@@ -249,7 +250,7 @@ func (a *App) Listhistory(w http.ResponseWriter, r *http.Request){
 func (a *App) Register(w http.ResponseWriter, r *http.Request){
 	var Request models.UserRequest
 	json.NewDecoder(r.Body).Decode(&Request)
-	hashpassword ,err := bcrypt.GenerateFromPassword([]byte(Request.Password), bcrypt.DefaultCost)
+	hashpassword ,err := bcrypt.GenerateFromPassword([]byte(Request.Password), bcrypt.DefaultCost) //this is like 60 long not 50 so password hash has to be above 60
 	if err != nil{
 		http.Error(w,"Bad Request",http.StatusBadRequest)
 		return
@@ -261,7 +262,7 @@ func (a *App) Register(w http.ResponseWriter, r *http.Request){
 		http.Error(w, "Username already exists", http.StatusConflict)
 		return
 	}
-		_,err =a.Pgconn.Exec(context.Background(), "INSERT INTO users (username,password_hash) VALUES ($1,$2)", Request.Username,hashpassword)
+	_,err =a.Pgconn.Exec(context.Background(), "INSERT INTO users (username,password_hash) VALUES ($1,$2)", Request.Username,hashpassword)
 	 if err!=nil{
 		http.Error(w, "Database Error", http.StatusExpectationFailed)
 		return

@@ -8,7 +8,6 @@ import "time"
 type Setredis struct{
 	Name string `json:"name"`
 	Bid string `json:"bid"` 
-	IP string		`json:"ip"`
 	Expiry int `json:"time"`
 }
 
@@ -34,7 +33,7 @@ type ActiveListResponse struct{
 type ListHistoryPerRow struct{
 	Bidname string `json:"bid_name"`
 	Bidamt string `json:"bid_amt"`
-	IP string `json:"ip"`
+	UserID string `json:"userid"`
 	Createdat time.Time `json:"created_at"`
 }
 

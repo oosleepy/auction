@@ -10,9 +10,10 @@ import (
 	redis "auction/internal/cache"
 	"auction/internal/db"
 	"auction/internal/handler"
-
+	"auction/internal/auth"
 	"github.com/joho/godotenv"
 	"github.com/gorilla/websocket"
+	
 )
 
 func main() {
@@ -50,13 +51,15 @@ func main() {
 
 	
 	mux := http.NewServeMux()	
-	mux.HandleFunc("/setbid", app.Setbid)
-	mux.HandleFunc("/bid", app.Bid)
+	mux.HandleFunc("/setbid", auth.VerifyMiddleware(http.HandlerFunc(app.Setbid)))
+	mux.HandleFunc("/bid", auth.VerifyMiddleware(http.HandlerFunc(app.Bid)))
 	mux.HandleFunc("/getbid", app.Getbid)
 	mux.HandleFunc("/ws", app.Ws)
 	mux.HandleFunc("/listactive", app.Listactive)
 	mux.HandleFunc("/listhistory", app.Listhistory)
 	mux.HandleFunc("/register", app.Register)
+	mux.HandleFunc("/login",app.Login)
+	mux.HandleFunc("/mybid",auth.VerifyMiddleware(http.HandlerFunc(app.GetTotalbid)))
 	log.Println("Server started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
 }
