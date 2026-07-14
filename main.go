@@ -60,6 +60,10 @@ func main() {
 	mux.HandleFunc("/register", app.Register)
 	mux.HandleFunc("/login",app.Login)
 	mux.HandleFunc("/mybid",auth.VerifyMiddleware(http.HandlerFunc(app.GetTotalbid)))
+
+	fs := http.FileServer(http.Dir("./frontend"))
+	mux.Handle("/", fs)
+
 	log.Println("Server started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
 }

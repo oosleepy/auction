@@ -16,7 +16,7 @@ import (
 	"auction/internal/models"
 
 	"github.com/gorilla/websocket"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -25,7 +25,7 @@ type App struct {
 	Redisconn     *redis.Client
 	Mutexbid      map[string]*sync.Mutex   // common and used by both /bid and /setbid to control race conditions for 3 cases -> (/bid , bid)(/setbid ,/setbid) (/bit , /setbid)
 	Cancel        map[string]context.CancelFunc
-	Pgconn        *pgx.Conn
+	Pgconn        *pgxpool.Pool
 	Metamutex     sync.Mutex  //meta check if mutexbid is already exists or not
 	Connectionmap map[string][]*websocket.Conn   //used to create a list of connection for a certain auction for websocket ie [auctioname] = [coonection1,connection2....]
 	Realtimemutex map[string]*sync.Mutex //common and used by both /ws and /bid to control the write and read of the connectionmap array without panic
@@ -44,7 +44,7 @@ func (a *App) exitwriteroutine(ctx context.Context, expiry int, namespace string
 		if err != nil {
 			log.Fatal(err)
 		}
-		_,err = a.Pgconn.Exec(context.Background(), "UPDATE users SET totalbid = totalbid + $1 WHERE id ", bidAmt,id)
+		_,err = a.Pgconn.Exec(context.Background(), "UPDATE users SET totalbid = totalbid + $1 WHERE id = $2", bidAmt,id)
 		if err != nil{
 			log.Fatal(err)
 		}

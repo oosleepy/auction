@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auction System</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Auth Section -->
+        <section id="auth-section" class="card">
+            <h2>Authentication</h2>
+            <div class="tabs">
+                <button id="tab-login" class="active">Login</button>
+                <button id="tab-register">Register</button>
+            </div>
+            <form id="auth-form">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" id="auth-submit">Login</button>
+                <p id="auth-msg" class="msg"></p>
+            </form>
+        </section>
+
+        <!-- Dashboard Section (Hidden by default) -->
+        <section id="dashboard-section" class="hidden">
+            <header class="dashboard-header">
+                <h2>Welcome, <span id="user-display"></span></h2>
+                <div class="header-actions">
+                    <p>Total Bid: <span id="total-bid">0</span></p>
+                    <button id="logout-btn" class="btn-secondary">Logout</button>
+                </div>
+            </header>
+
+            <div class="dashboard-grid">
+                <!-- Create Auction -->
+                <div class="card">
+                    <h3>Create Auction</h3>
+                    <form id="create-auction-form">
+                        <div class="form-group">
+                            <label for="auction-name">Auction Name</label>
+                            <input type="text" id="auction-name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="initial-bid">Starting Bid</label>
+                            <input type="number" id="initial-bid" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="expiry-time">Expiry (seconds)</label>
+                            <input type="number" id="expiry-time" required>
+                        </div>
+                        <button type="submit">Create</button>
+                        <p id="create-msg" class="msg"></p>
+                    </form>
+                </div>
+
+                <!-- Active Auctions -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Active Auctions</h3>
+                        <button id="refresh-active" class="btn-icon">↻</button>
+                    </div>
+                    <ul id="active-list" class="item-list">
+                        <!-- Active auctions injected here -->
+                    </ul>
+                </div>
+                
+                <!-- Auction History -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Auction History</h3>
+                        <button id="refresh-history" class="btn-icon">↻</button>
+                    </div>
+                    <ul id="history-list" class="item-list">
+                        <!-- History injected here -->
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Live Bidding Modal (Hidden by default) -->
+        <div id="bidding-modal" class="modal hidden">
+            <div class="modal-content">
+                <span class="close-btn">&times;</span>
+                <h3 id="modal-auction-name">Auction Name</h3>
+                <div class="live-status">
+                    <span class="pulse"></span> Live
+                </div>
+                <div class="bid-display">
+                    <p>Current Highest Bid</p>
+                    <h2 id="modal-current-bid">0</h2>
+                </div>
+                <form id="place-bid-form">
+                    <div class="form-group">
+                        <label for="new-bid">Your Bid</label>
+                        <input type="number" id="new-bid" required>
+                    </div>
+                    <button type="submit">Place Bid</button>
+                    <p id="bid-msg" class="msg"></p>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
