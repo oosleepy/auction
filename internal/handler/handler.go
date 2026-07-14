@@ -39,9 +39,13 @@ func (a *App) exitwriteroutine(ctx context.Context, expiry int, namespace string
 	case <-time.After(time.Duration(expiry)):
 		bidAmt := a.Redisconn.Get(context.Background(), namespace+"bid").Val()
 		bidName := a.Redisconn.Get(context.Background(), namespace+"name").Val()
-		ip := a.Redisconn.Get(context.Background(), namespace+"winner").Val()
-		_, err := a.Pgconn.Exec(context.Background(), "INSERT INTO bid_history (bid_name,bidamt,winner) VALUES ($1,$2,$3) ", bidName, bidAmt, ip)
+		id := a.Redisconn.Get(context.Background(), namespace+"winner").Val()
+		_, err := a.Pgconn.Exec(context.Background(), "INSERT INTO bid_history (bid_name,bidamt,winner) VALUES ($1,$2,$3) ", bidName, bidAmt, id)
 		if err != nil {
+			log.Fatal(err)
+		}
+		_,err = a.Pgconn.Exec(context.Background(), "UPDATE users SET totalbid = totalbid + $1 WHERE id ", bidAmt,id)
+		if err != nil{
 			log.Fatal(err)
 		}
 		a.Redisconn.Del(context.Background(), namespace+"bid", namespace+"name", namespace+"winner", namespace+"start")
