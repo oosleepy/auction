@@ -250,18 +250,22 @@ func (a *App) Listhistory(w http.ResponseWriter, r *http.Request){
 func (a *App) Register(w http.ResponseWriter, r *http.Request){
 	var Request models.UserRequest
 	json.NewDecoder(r.Body).Decode(&Request)
+
 	hashpassword ,err := bcrypt.GenerateFromPassword([]byte(Request.Password), bcrypt.DefaultCost) //this is like 60 long not 50 so password hash has to be above 60
 	if err != nil{
 		http.Error(w,"Bad Request",http.StatusBadRequest)
 		return
-	}	
+	}
+		
+	//existing username check 
 	var check string 
-
 	exist := a.Pgconn.QueryRow(context.Background(), "SELECT username FROM users WHERE username = $1", Request.Username).Scan(&check)
 	if exist == nil{
 		http.Error(w, "Username already exists", http.StatusConflict)
 		return
 	}
+	
+	//inserting username and hashed password into the db
 	_,err =a.Pgconn.Exec(context.Background(), "INSERT INTO users (username,password_hash) VALUES ($1,$2)", Request.Username,hashpassword)
 	 if err!=nil{
 		http.Error(w, "Database Error", http.StatusExpectationFailed)
@@ -272,6 +276,9 @@ func (a *App) Register(w http.ResponseWriter, r *http.Request){
 func (a *App) Login(w http.ResponseWriter, r *http.Request){
 	var Request models.UserRequest
 	json.NewDecoder(r.Body).Decode(&Request)
+
+
+	///get the hash pass in db for the username request 
 	var userid int	
 	var hashpass string
 	err :=  a.Pgconn.QueryRow(context.Background(), "SELECT password_hash,id FROM users WHERE username = $1",Request.Username).Scan(&hashpass,&userid)
@@ -279,18 +286,21 @@ func (a *App) Login(w http.ResponseWriter, r *http.Request){
 		http.Error(w,"User Not Found",http.StatusNotFound)
 		return
 	}
+	//compare stored hash and the new password request 
 	err = bcrypt.CompareHashAndPassword([]byte(hashpass),[]byte(Request.Password))
 	if err != nil{
 		http.Error(w,"Incorrect Password",http.StatusConflict)
 		return
 	}
 	
+	//creeate an accesstoken
 	tokenstring,err := auth.CreateAcessToken(userid)
 	if err !=nil{
 		http.Error(w,"jwt error",http.StatusServiceUnavailable)
 		return
 	}
 	
+	//creating a token header to put encode it into the w
 	tokenheader := auth.Tokenheader{
 		Token:tokenstring,
 	}
