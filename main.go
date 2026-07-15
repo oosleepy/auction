@@ -19,7 +19,7 @@ import (
 func main() {
 
 	
-	godotenv.Load() //loads the env variables -> redis url , postgres url
+	_ = godotenv.Load() //loads the env variables -> redis url , postgres url
 	cfg := config.Loadconfig() //returns a struct with attr redisurl and postgres url from env
 	redisconn, err := redis.Redisconn(cfg.RedisURL)
 	if err!= nil{
