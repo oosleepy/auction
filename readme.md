@@ -2,7 +2,7 @@
 
 Real-time concurrent auction backend built in Go.
 
-Primary goal: hands-on learning of concurrency, race conditions, and mutex-based safe operations under load.
+Primary goal: learning backend principles such as concurrency, race conditions, and mutex-based safe operations under load.
 
 ## Stack
 Go · Redis · PostgreSQL · Docker
