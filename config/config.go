@@ -1,4 +1,4 @@
-//Package config deals with config 
+//Package config returns a config struct with redisurl and posgresurl attributes 
 package config
 
 import(

@@ -32,6 +32,11 @@ type App struct {
 	MetaRealmutex sync.Mutex
 }
 
+//idea behind exit 
+//run go routine of exit for each auction
+//and set case 1 as if time finished then do the postgres thingy and etc 
+//case 2 would be if cancel functio is called then run the return 
+
 func (a *App) exitwriteroutine(ctx context.Context, expiry int, namespace string) {
 	select {
 
